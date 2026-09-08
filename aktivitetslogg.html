@@ -183,6 +183,46 @@
     padding:12px 18px 6px;
   }
 
+  .tabs{
+    display:flex;
+    gap:2px;
+    border-bottom:1px solid var(--line);
+    padding:0 10px;
+    background:var(--paper);
+  }
+  .tab-btn{
+    border:none;
+    border-radius:0;
+    background:transparent;
+    padding:13px 14px 11px;
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--ink-soft);
+    border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .tab-btn:hover{ color:var(--ink); }
+  .tab-btn.active{
+    color:var(--ink);
+    border-bottom-color:var(--accent);
+  }
+  .tab-btn .badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    background:var(--muted-soft);
+    color:var(--ink-soft);
+    border-radius:99px;
+    padding:1px 7px;
+  }
+  .tab-btn.active .badge{
+    background:var(--accent-soft);
+    color:var(--accent);
+  }
+  .tab-panel[hidden]{ display:none; }
+
   .row{
     display:grid;
     grid-template-columns:1fr auto;
@@ -324,18 +364,14 @@
     </div>
 
     <div class="panel">
-      <div class="group-title">Sökta jobb</div>
-      <div id="list-jobb"></div>
-    </div>
-
-    <div class="panel">
-      <div class="group-title">Intervjuer</div>
-      <div id="list-intervju"></div>
-    </div>
-
-    <div class="panel">
-      <div class="group-title">Kurser &amp; utbildningar</div>
-      <div id="list-kurs"></div>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="jobb" role="tab">Sökta jobb <span class="badge" id="tabcount-jobb">0</span></button>
+        <button type="button" class="tab-btn" data-tab="intervju" role="tab">Intervjuer <span class="badge" id="tabcount-intervju">0</span></button>
+        <button type="button" class="tab-btn" data-tab="kurs" role="tab">Kurser &amp; utbildningar <span class="badge" id="tabcount-kurs">0</span></button>
+      </div>
+      <div class="tab-panel" id="tab-jobb"><div id="list-jobb"></div></div>
+      <div class="tab-panel" id="tab-intervju" hidden><div id="list-intervju"></div></div>
+      <div class="tab-panel" id="tab-kurs" hidden><div id="list-kurs"></div></div>
     </div>
   </main>
 
@@ -431,7 +467,7 @@
 
 <script>
 (function(){
-  var state = { entries: [], period: null, db: null, editingId: null, kind: 'jobb' };
+  var state = { entries: [], period: null, db: null, editingId: null, kind: 'jobb', activeTab: 'jobb' };
 
   function fmtDate(s){
     if(!s) return '';
@@ -470,12 +506,29 @@
     if(!kurs.length) kursEl.innerHTML = '<div class="empty">Inga kurser loggade ännu.</div>';
     kurs.forEach(function(e){ kursEl.appendChild(rowFor(e)); });
 
+    document.getElementById('tabcount-jobb').textContent = jobb.length;
+    document.getElementById('tabcount-intervju').textContent = intervju.length;
+    document.getElementById('tabcount-kurs').textContent = kurs.length;
+
     var counts = {new:0, done:0, skip:0};
     state.entries.forEach(function(e){ counts[e.status||'new']++; });
     document.getElementById('count-new').textContent = counts.new;
     document.getElementById('count-done').textContent = counts.done;
     document.getElementById('count-skip').textContent = counts.skip;
   }
+
+  function setTab(t){
+    state.activeTab = t;
+    ['jobb','intervju','kurs'].forEach(function(k){
+      document.getElementById('tab-' + k).hidden = (k !== t);
+    });
+    document.querySelectorAll('.tab-btn').forEach(function(b){
+      b.classList.toggle('active', b.dataset.tab === t);
+    });
+  }
+  document.querySelectorAll('.tab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ setTab(b.dataset.tab); });
+  });
 
   function rowFor(e){
     var row = document.createElement('div');
@@ -587,7 +640,7 @@
     state.editingId = entry ? entry.id : null;
     document.getElementById('dlg-title').textContent = entry ? 'Redigera post' : 'Ny post';
     document.getElementById('dlg-delete').style.display = entry ? 'block' : 'none';
-    setKind(entry ? entry.kind : 'jobb');
+    setKind(entry ? entry.kind : state.activeTab);
 
     document.getElementById('f-title').value = entry ? (entry.title||'') : '';
     document.getElementById('f-org').value = entry ? (entry.org||'') : '';
