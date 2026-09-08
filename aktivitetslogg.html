@@ -329,6 +329,11 @@
     </div>
 
     <div class="panel">
+      <div class="group-title">Intervjuer</div>
+      <div id="list-intervju"></div>
+    </div>
+
+    <div class="panel">
       <div class="group-title">Kurser &amp; utbildningar</div>
       <div id="list-kurs"></div>
     </div>
@@ -346,6 +351,7 @@
     <div class="dlg-body">
       <div class="kind-toggle">
         <button type="button" class="kind-btn active" data-kind="jobb">Sökt jobb</button>
+        <button type="button" class="kind-btn" data-kind="intervju">Intervju</button>
         <button type="button" class="kind-btn" data-kind="kurs">Kurs / utbildning</button>
       </div>
 
@@ -359,7 +365,7 @@
       </div>
 
       <div class="field-row" id="row-omf-ort">
-        <div class="field">
+        <div class="field" id="field-omfattning">
           <label for="f-omfattning">Omfattning</label>
           <input type="text" id="f-omfattning" placeholder="Heltid / Deltid / ~75 %">
         </div>
@@ -381,6 +387,13 @@
         <div class="field" id="field-sokdatum">
           <label for="f-sokdatum">Sökdatum</label>
           <input type="date" id="f-sokdatum">
+        </div>
+      </div>
+
+      <div class="field-row" id="row-intervjudatum" hidden>
+        <div class="field">
+          <label for="f-intervjudatum">Vilket datum hade du intervjun?</label>
+          <input type="date" id="f-intervjudatum">
         </div>
       </div>
 
@@ -435,17 +448,24 @@
 
   function render(){
     var jobbEl = document.getElementById('list-jobb');
+    var intervjuEl = document.getElementById('list-intervju');
     var kursEl = document.getElementById('list-kurs');
     jobbEl.innerHTML = '';
+    intervjuEl.innerHTML = '';
     kursEl.innerHTML = '';
 
     var jobb = state.entries.filter(function(e){ return e.kind === 'jobb'; })
       .sort(function(a,b){ return (b.sokdatum||'').localeCompare(a.sokdatum||''); });
+    var intervju = state.entries.filter(function(e){ return e.kind === 'intervju'; })
+      .sort(function(a,b){ return (b.intervjudatum||'').localeCompare(a.intervjudatum||''); });
     var kurs = state.entries.filter(function(e){ return e.kind === 'kurs'; })
       .sort(function(a,b){ return (b.start||'').localeCompare(a.start||''); });
 
     if(!jobb.length) jobbEl.innerHTML = '<div class="empty">Inga sökta jobb loggade ännu.</div>';
     jobb.forEach(function(e){ jobbEl.appendChild(rowFor(e)); });
+
+    if(!intervju.length) intervjuEl.innerHTML = '<div class="empty">Inga intervjuer loggade ännu.</div>';
+    intervju.forEach(function(e){ intervjuEl.appendChild(rowFor(e)); });
 
     if(!kurs.length) kursEl.innerHTML = '<div class="empty">Inga kurser loggade ännu.</div>';
     kurs.forEach(function(e){ kursEl.appendChild(rowFor(e)); });
@@ -481,6 +501,9 @@
       if(e.ort) meta.appendChild(metaSpan(e.ort));
       if(e.annons) meta.appendChild(metaSpan(e.annons === 'ja' ? 'Svarade på annons' : 'Ej via annons'));
       if(e.sokdatum) meta.appendChild(metaSpan(fmtDate(e.sokdatum), true));
+    } else if(e.kind === 'intervju'){
+      if(e.ort) meta.appendChild(metaSpan(e.ort));
+      if(e.intervjudatum) meta.appendChild(metaSpan(fmtDate(e.intervjudatum), true));
     } else {
       if(e.omfattning) meta.appendChild(metaSpan(e.omfattning));
       if(e.start) meta.appendChild(metaSpan(fmtDate(e.start) + (e.slut ? ' – ' + fmtDate(e.slut) : ''), true));
@@ -545,12 +568,15 @@
     document.querySelectorAll('.kind-btn').forEach(function(b){
       b.classList.toggle('active', b.dataset.kind === k);
     });
-    var isJobb = k === 'jobb';
-    document.getElementById('lbl-title').textContent = isJobb ? 'Yrkesroll' : 'Kursens/utbildningens namn';
-    document.getElementById('lbl-org').textContent = isJobb ? 'Arbetsgivare' : 'Anordnare';
+    var isJobb = k === 'jobb', isIntervju = k === 'intervju', isKurs = k === 'kurs';
+    document.getElementById('lbl-title').textContent = isKurs ? 'Kursens/utbildningens namn' : 'Yrkesroll';
+    document.getElementById('lbl-org').textContent = isKurs ? 'Anordnare' : 'Arbetsgivare';
+    document.getElementById('row-omf-ort').hidden = isKurs;
+    document.getElementById('field-omfattning').hidden = isIntervju;
+    document.getElementById('field-ort').hidden = isKurs;
     document.getElementById('row-annons-datum').hidden = !isJobb;
-    document.getElementById('field-ort').hidden = !isJobb;
-    document.getElementById('row-kursdatum').hidden = isJobb;
+    document.getElementById('row-intervjudatum').hidden = !isIntervju;
+    document.getElementById('row-kursdatum').hidden = !isKurs;
   }
 
   document.querySelectorAll('.kind-btn').forEach(function(b){
@@ -569,6 +595,7 @@
     document.getElementById('f-ort').value = entry ? (entry.ort||'') : '';
     document.getElementById('f-annons').value = entry ? (entry.annons||'') : '';
     document.getElementById('f-sokdatum').value = entry ? (entry.sokdatum||'') : '';
+    document.getElementById('f-intervjudatum').value = entry ? (entry.intervjudatum||'') : '';
     document.getElementById('f-start').value = entry ? (entry.start||'') : '';
     document.getElementById('f-slut').value = entry ? (entry.slut||'') : '';
     document.getElementById('f-status').value = entry ? (entry.status||'new') : 'new';
@@ -592,16 +619,20 @@
       kind: state.kind,
       title: document.getElementById('f-title').value.trim(),
       org: document.getElementById('f-org').value.trim(),
-      omfattning: document.getElementById('f-omfattning').value.trim(),
       status: document.getElementById('f-status').value,
       note: document.getElementById('f-note').value.trim(),
       updatedAt: new Date().toISOString()
     };
     if(state.kind === 'jobb'){
+      data.omfattning = document.getElementById('f-omfattning').value.trim();
       data.ort = document.getElementById('f-ort').value.trim();
       data.annons = document.getElementById('f-annons').value;
       data.sokdatum = document.getElementById('f-sokdatum').value;
+    } else if(state.kind === 'intervju'){
+      data.ort = document.getElementById('f-ort').value.trim();
+      data.intervjudatum = document.getElementById('f-intervjudatum').value;
     } else {
+      data.omfattning = document.getElementById('f-omfattning').value.trim();
       data.start = document.getElementById('f-start').value;
       data.slut = document.getElementById('f-slut').value;
     }

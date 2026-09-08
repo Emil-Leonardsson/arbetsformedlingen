@@ -1,6 +1,6 @@
 # Arbetsförmedlingen – aktivitetsrapportering
 
-Detta är Emils underlag för Arbetsförmedlingens aktivitetsrapport (sökta jobb och kurser/utbildningar).
+Detta är Emils underlag för Arbetsförmedlingens aktivitetsrapport (sökta jobb, jobbintervjuer och kurser/utbildningar).
 
 ## Den officiella källan: Aktivitetsloggen (Artifact)
 
@@ -17,19 +17,24 @@ Så fort Emil klistrar in eller berättar om ett jobb han sökt, eller en kurs/u
 ## Datamodell (collection `entries`, ett dokument per post)
 
 ```
-kind: "jobb" | "kurs"
-title: string       // yrkesroll (jobb) eller kursnamn (kurs)
-org: string          // arbetsgivare (jobb) eller anordnare (kurs)
-omfattning: string   // fritext, t.ex. "Heltid", "Deltid", "~75%"
+kind: "jobb" | "intervju" | "kurs"
+title: string       // yrkesroll (jobb/intervju) eller kursnamn (kurs)
+org: string          // arbetsgivare (jobb/intervju) eller anordnare (kurs)
 status: "new" | "done" | "skip"
 note: string          // frivillig kontext, t.ex. varför status är "skip", eller vad som antogs
 
 // jobb only:
+omfattning: string   // fritext, t.ex. "Heltid", "Deltid", "~75%"
 ort: string
 annons: "ja" | "nej"
 sokdatum: "ÅÅÅÅ-MM-DD"
 
+// intervju only:
+ort: string
+intervjudatum: "ÅÅÅÅ-MM-DD"
+
 // kurs only:
+omfattning: string
 start: "ÅÅÅÅ-MM-DD"
 slut: "ÅÅÅÅ-MM-DD"
 
