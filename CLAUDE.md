@@ -38,8 +38,25 @@ omfattning: string
 start: "ÅÅÅÅ-MM-DD"
 slut: "ÅÅÅÅ-MM-DD"
 
+// jobb/intervju only, sätts när ett avslag kommer in — se "Avslag" nedan:
+avslag: boolean
+avslagsdatum: "ÅÅÅÅ-MM-DD"
+avslagsinfo: string
+
 createdAt / updatedAt: ISO-tidsstämpel
 ```
+
+## Avslag
+
+När ett jobb eller en intervju får avslag: **skriv INTE in det i `note`** (t.ex. "AVSLAG mottaget ..."), det gör det otydligt och blandar ihop utfallet med kontexten om själva ansökan. Sätt istället de dedikerade fälten på samma dokument:
+
+```
+avslag: true
+avslagsdatum: "ÅÅÅÅ-MM-DD"
+avslagsinfo: string   // t.ex. "Från Frank Brunell: gick vidare med andra kandidater"
+```
+
+`note` ska bara innehålla kontext om själva ansökan/intervjun (hur den kom till, vem som förmedlade den, etc.), aldrig utfallet. Sidan visar avslaget som en egen tydlig markering (röd "Avslag"-chip + rad) separat från `note` och från rapporteringsstatusen. Ett avslag ändrar INTE `status` automatiskt, jobbet kan redan vara `done` (rapporterat till Arbetsförmedlingen som sökt jobb, vilket det ska vara oavsett utfall) eller `new`.
 
 Periodinfo ligger i `meta/period`: `{ periodLabel, submitWindow, earliestDate }`.
 

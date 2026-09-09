@@ -16,6 +16,8 @@
     --warn-soft:#f4ead4;
     --muted:#8b8577;
     --muted-soft:#e9e6df;
+    --bad:#a13d3d;
+    --bad-soft:#f5e3e1;
     --shadow: 0 1px 2px rgba(32,36,31,0.06), 0 4px 14px rgba(32,36,31,0.05);
   }
   @media (prefers-color-scheme: dark){
@@ -33,6 +35,8 @@
       --warn-soft:#332a17;
       --muted:#9b9585;
       --muted-soft:#26241d;
+      --bad:#e19a90;
+      --bad-soft:#3a2320;
       --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 18px rgba(0,0,0,0.35);
     }
   }
@@ -50,6 +54,8 @@
     --warn-soft:#332a17;
     --muted:#9b9585;
     --muted-soft:#26241d;
+    --bad:#e19a90;
+    --bad-soft:#3a2320;
     --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 18px rgba(0,0,0,0.35);
   }
 
@@ -254,6 +260,13 @@
     padding:5px 8px;
     display:inline-block;
   }
+  .row-avslag{
+    color:var(--bad);
+    background:var(--bad-soft);
+    font-weight:500;
+    display:block;
+    margin-top:6px;
+  }
 
   .row-actions{
     display:flex;
@@ -272,6 +285,7 @@
   .chip.new{ background:var(--warn-soft); color:var(--warn); }
   .chip.done{ background:var(--good-soft); color:var(--good); }
   .chip.skip{ background:var(--muted-soft); color:var(--muted); }
+  .chip.bad{ background:var(--bad-soft); color:var(--bad); }
 
   .row-btns{ display:flex; gap:6px; }
   .row-btns button{ padding:5px 9px; font-size:12px; }
@@ -444,6 +458,23 @@
         </div>
       </div>
 
+      <div class="field" id="field-avslag-toggle">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink);">
+          <input type="checkbox" id="f-avslag-check" style="width:auto;">
+          Avslag mottaget
+        </label>
+      </div>
+      <div class="field-row" id="row-avslag-detail" hidden>
+        <div class="field">
+          <label for="f-avslagsdatum">Avslagsdatum</label>
+          <input type="date" id="f-avslagsdatum">
+        </div>
+        <div class="field">
+          <label for="f-avslagsinfo">Från vem / anledning</label>
+          <input type="text" id="f-avslagsinfo" placeholder="T.ex. Namn: gick vidare med annan kandidat">
+        </div>
+      </div>
+
       <div class="field">
         <label for="f-status">Status</label>
         <select id="f-status">
@@ -584,10 +615,26 @@
       main.appendChild(note);
     }
 
+    if(e.avslag){
+      var avslag = document.createElement('div');
+      avslag.className = 'row-note row-avslag';
+      var avslagBits = ['Avslag'];
+      if(isValidISODate(e.avslagsdatum)) avslagBits.push(fmtDate(e.avslagsdatum));
+      avslag.textContent = avslagBits.join(' · ') + (e.avslagsinfo ? ': ' + e.avslagsinfo : '');
+      main.appendChild(avslag);
+    }
+
     row.appendChild(main);
 
     var actions = document.createElement('div');
     actions.className = 'row-actions';
+
+    if(e.avslag){
+      var badChip = document.createElement('span');
+      badChip.className = 'chip bad';
+      badChip.textContent = 'Avslag';
+      actions.appendChild(badChip);
+    }
 
     var chip = document.createElement('span');
     chip.className = 'chip ' + statusClass(e.status);
@@ -644,17 +691,23 @@
     document.getElementById('row-annons-datum').hidden = !isJobb;
     document.getElementById('row-intervjudatum').hidden = !isIntervju;
     document.getElementById('row-kursdatum').hidden = !isKurs;
+    document.getElementById('field-avslag-toggle').hidden = isKurs;
+    if(isKurs) document.getElementById('row-avslag-detail').hidden = true;
+    else document.getElementById('row-avslag-detail').hidden = !document.getElementById('f-avslag-check').checked;
   }
 
   document.querySelectorAll('.kind-btn').forEach(function(b){
     b.addEventListener('click', function(){ setKind(b.dataset.kind); });
   });
 
+  document.getElementById('f-avslag-check').addEventListener('change', function(){
+    document.getElementById('row-avslag-detail').hidden = !this.checked;
+  });
+
   function openDialog(entry){
     state.editingId = entry ? entry.id : null;
     document.getElementById('dlg-title').textContent = entry ? 'Redigera post' : 'Ny post';
     document.getElementById('dlg-delete').style.display = entry ? 'block' : 'none';
-    setKind(entry ? entry.kind : state.activeTab);
 
     document.getElementById('f-title').value = entry ? (entry.title||'') : '';
     document.getElementById('f-org').value = entry ? (entry.org||'') : '';
@@ -667,6 +720,11 @@
     document.getElementById('f-slut').value = entry ? (entry.slut||'') : '';
     document.getElementById('f-status').value = entry ? (entry.status||'new') : 'new';
     document.getElementById('f-note').value = entry ? (entry.note||'') : '';
+    document.getElementById('f-avslag-check').checked = entry ? !!entry.avslag : false;
+    document.getElementById('f-avslagsdatum').value = entry ? (entry.avslagsdatum||'') : '';
+    document.getElementById('f-avslagsinfo').value = entry ? (entry.avslagsinfo||'') : '';
+
+    setKind(entry ? entry.kind : state.activeTab);
 
     dialog.showModal();
   }
@@ -702,6 +760,11 @@
       data.omfattning = document.getElementById('f-omfattning').value.trim();
       data.start = document.getElementById('f-start').value;
       data.slut = document.getElementById('f-slut').value;
+    }
+    if(state.kind !== 'kurs'){
+      data.avslag = document.getElementById('f-avslag-check').checked;
+      data.avslagsdatum = data.avslag ? document.getElementById('f-avslagsdatum').value : '';
+      data.avslagsinfo = data.avslag ? document.getElementById('f-avslagsinfo').value.trim() : '';
     }
     if(!state.db) return;
     var col = state.db.collection('entries');
