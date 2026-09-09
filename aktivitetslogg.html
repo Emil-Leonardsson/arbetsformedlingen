@@ -469,10 +469,12 @@
 (function(){
   var state = { entries: [], period: null, db: null, editingId: null, kind: 'jobb', activeTab: 'jobb' };
 
+  function isValidISODate(s){
+    return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s+'T00:00:00'));
+  }
   function fmtDate(s){
-    if(!s) return '';
+    if(!isValidISODate(s)) return '';
     var d = new Date(s+'T00:00:00');
-    if(isNaN(d)) return s;
     return d.toLocaleDateString('sv-SE', {day:'numeric', month:'short', year:'numeric'});
   }
   function statusLabel(s){
@@ -494,10 +496,18 @@
       .sort(function(a,b){
         var aNA = !a.annons, bNA = !b.annons;
         if(aNA !== bNA) return aNA ? 1 : -1;
-        return (b.sokdatum||'').localeCompare(a.sokdatum||'');
+        var aOK = isValidISODate(a.sokdatum), bOK = isValidISODate(b.sokdatum);
+        if(aOK !== bOK) return aOK ? -1 : 1;
+        if(!aOK) return 0;
+        return b.sokdatum.localeCompare(a.sokdatum);
       });
     var intervju = state.entries.filter(function(e){ return e.kind === 'intervju'; })
-      .sort(function(a,b){ return (b.intervjudatum||'').localeCompare(a.intervjudatum||''); });
+      .sort(function(a,b){
+        var aOK = isValidISODate(a.intervjudatum), bOK = isValidISODate(b.intervjudatum);
+        if(aOK !== bOK) return aOK ? -1 : 1;
+        if(!aOK) return 0;
+        return b.intervjudatum.localeCompare(a.intervjudatum);
+      });
     var kurs = state.entries.filter(function(e){ return e.kind === 'kurs'; })
       .sort(function(a,b){ return (b.start||'').localeCompare(a.start||''); });
 
@@ -557,10 +567,10 @@
       if(e.omfattning) meta.appendChild(metaSpan(e.omfattning));
       if(e.ort) meta.appendChild(metaSpan(e.ort));
       meta.appendChild(metaSpan(e.annons === 'ja' ? 'Svarade på annons' : e.annons === 'nej' ? 'Ej via annons' : 'Annons: N/A'));
-      if(e.sokdatum) meta.appendChild(metaSpan(fmtDate(e.sokdatum), true));
+      meta.appendChild(metaSpan(isValidISODate(e.sokdatum) ? fmtDate(e.sokdatum) : 'Sökdatum: N/A', true));
     } else if(e.kind === 'intervju'){
       if(e.ort) meta.appendChild(metaSpan(e.ort));
-      if(e.intervjudatum) meta.appendChild(metaSpan(fmtDate(e.intervjudatum), true));
+      meta.appendChild(metaSpan(isValidISODate(e.intervjudatum) ? fmtDate(e.intervjudatum) : 'Intervjudatum: N/A', true));
     } else {
       if(e.omfattning) meta.appendChild(metaSpan(e.omfattning));
       if(e.start) meta.appendChild(metaSpan(fmtDate(e.start) + (e.slut ? ' – ' + fmtDate(e.slut) : ''), true));
