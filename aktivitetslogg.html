@@ -491,7 +491,11 @@
     kursEl.innerHTML = '';
 
     var jobb = state.entries.filter(function(e){ return e.kind === 'jobb'; })
-      .sort(function(a,b){ return (b.sokdatum||'').localeCompare(a.sokdatum||''); });
+      .sort(function(a,b){
+        var aNA = !a.annons, bNA = !b.annons;
+        if(aNA !== bNA) return aNA ? 1 : -1;
+        return (b.sokdatum||'').localeCompare(a.sokdatum||'');
+      });
     var intervju = state.entries.filter(function(e){ return e.kind === 'intervju'; })
       .sort(function(a,b){ return (b.intervjudatum||'').localeCompare(a.intervjudatum||''); });
     var kurs = state.entries.filter(function(e){ return e.kind === 'kurs'; })
@@ -552,7 +556,7 @@
     if(e.kind === 'jobb'){
       if(e.omfattning) meta.appendChild(metaSpan(e.omfattning));
       if(e.ort) meta.appendChild(metaSpan(e.ort));
-      if(e.annons) meta.appendChild(metaSpan(e.annons === 'ja' ? 'Svarade på annons' : 'Ej via annons'));
+      meta.appendChild(metaSpan(e.annons === 'ja' ? 'Svarade på annons' : e.annons === 'nej' ? 'Ej via annons' : 'Annons: N/A'));
       if(e.sokdatum) meta.appendChild(metaSpan(fmtDate(e.sokdatum), true));
     } else if(e.kind === 'intervju'){
       if(e.ort) meta.appendChild(metaSpan(e.ort));
