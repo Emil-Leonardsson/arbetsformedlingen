@@ -525,7 +525,23 @@
 
 <script>
 (function(){
-  var state = { entries: [], period: null, db: null, editingId: null, kind: 'jobb', activeTab: 'jobb' };
+  var SUPABASE_PROJECT = 'kpaolyovfybxedgaigvp';
+  var state = { entries: [], period: null, mcp: null, editingId: null, kind: 'jobb', activeTab: 'jobb' };
+
+  function sqlStr(v){ return (v === null || v === undefined || v === '') ? 'null' : "'" + String(v).replace(/'/g, "''") + "'"; }
+  function sqlBool(v){ return v ? 'true' : 'false'; }
+
+  async function runSql(query){
+    var res = await state.mcp.callTool('Supabase', 'execute_sql', { project_id: SUPABASE_PROJECT, query: query }, { cache: false });
+    var payload = res && res.payload;
+    var text = null;
+    if(typeof payload === 'string') text = payload;
+    else if(payload && typeof payload.result === 'string') text = payload.result;
+    if(text === null) return payload;
+    var match = text.match(/<untrusted-data-[^>]*>\s*([\[{][\s\S]*?)\s*<\/untrusted-data-[^>]*>/);
+    var jsonStr = match ? match[1].trim() : text.trim();
+    try{ return JSON.parse(jsonStr); }catch(e){ return jsonStr; }
+  }
 
   function isValidISODate(s){
     return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s+'T00:00:00'));
@@ -679,16 +695,16 @@
         b.type = 'button';
         b.className = 'status-pill ' + statusClass(s) + (s === current ? ' active' : '');
         b.textContent = statusLabel(s);
-        b.disabled = !state.db;
+        b.disabled = !state.mcp;
         b.addEventListener('click', function(){
-          if(!state.db || s === e.status) return;
+          if(!state.mcp || s === e.status) return;
           var prevStatus = e.status;
           statusErr.hidden = true;
           setSaving();
-          state.db.collection('entries').doc(e.id).update({ status: s, updatedAt: new Date().toISOString() })
+          runSql('update arbetsformedlingen.entries set status=' + sqlStr(s) + ', updated_at=now() where id=' + sqlStr(e.id))
             .then(function(){
               e.status = s;
-              renderGroup(s);
+              render();
             })
             .catch(function(err){
               renderGroup(prevStatus);
@@ -725,11 +741,11 @@
 
   function renderPeriod(){
     var p = state.period || {};
-    document.getElementById('period-label').textContent = p.periodLabel || 'Ej inställt';
-    document.getElementById('period-sub').textContent = p.submitWindow ? ('Skicka in: ' + p.submitWindow) : '';
+    document.getElementById('period-label').textContent = p.period_label || 'Ej inställt';
+    document.getElementById('period-sub').textContent = p.submit_window ? ('Skicka in: ' + p.submit_window) : '';
     var floorEl = document.getElementById('period-floor');
-    if(p.earliestDate){
-      floorEl.innerHTML = 'Tidigaste godkända datum: <span class="mono">' + fmtDate(p.earliestDate) + '</span>';
+    if(p.earliest_date){
+      floorEl.innerHTML = 'Tidigaste godkända datum: <span class="mono">' + fmtDate(p.earliest_date) + '</span>';
     } else {
       floorEl.textContent = '';
     }
@@ -796,72 +812,93 @@
   document.getElementById('dlg-cancel').addEventListener('click', function(){ dialog.close(); });
 
   document.getElementById('dlg-delete').addEventListener('click', function(){
-    if(!state.db || !state.editingId) return;
-    state.db.collection('entries').doc(state.editingId).delete();
+    if(!state.mcp || !state.editingId) return;
+    runSql('delete from arbetsformedlingen.entries where id=' + sqlStr(state.editingId))
+      .then(loadEntries)
+      .catch(function(err){ alertInline('Kunde inte ta bort: ' + (err && err.code ? err.code : String(err))); });
     dialog.close();
   });
 
   form.addEventListener('submit', function(ev){
-    var data = {
-      kind: state.kind,
-      title: document.getElementById('f-title').value.trim(),
-      org: document.getElementById('f-org').value.trim(),
-      status: document.getElementById('f-status').value,
-      note: document.getElementById('f-note').value.trim(),
-      updatedAt: new Date().toISOString()
-    };
-    if(state.kind === 'jobb'){
-      data.omfattning = document.getElementById('f-omfattning').value.trim();
-      data.ort = document.getElementById('f-ort').value.trim();
-      data.annons = document.getElementById('f-annons').value;
-      data.sokdatum = document.getElementById('f-sokdatum').value;
-    } else if(state.kind === 'intervju'){
-      data.ort = document.getElementById('f-ort').value.trim();
-      data.intervjudatum = document.getElementById('f-intervjudatum').value;
+    var kind = state.kind;
+    var cols = ['kind','title','org','status','note'];
+    var vals = [sqlStr(kind), sqlStr(document.getElementById('f-title').value.trim()), sqlStr(document.getElementById('f-org').value.trim()), sqlStr(document.getElementById('f-status').value), sqlStr(document.getElementById('f-note').value.trim())];
+
+    function add(col, val){ cols.push(col); vals.push(val); }
+
+    if(kind === 'jobb'){
+      add('omfattning', sqlStr(document.getElementById('f-omfattning').value.trim()));
+      add('ort', sqlStr(document.getElementById('f-ort').value.trim()));
+      add('annons', sqlStr(document.getElementById('f-annons').value));
+      add('sokdatum', sqlStr(document.getElementById('f-sokdatum').value));
+    } else if(kind === 'intervju'){
+      add('ort', sqlStr(document.getElementById('f-ort').value.trim()));
+      add('intervjudatum', sqlStr(document.getElementById('f-intervjudatum').value));
     } else {
-      data.omfattning = document.getElementById('f-omfattning').value.trim();
-      data.start = document.getElementById('f-start').value;
-      data.slut = document.getElementById('f-slut').value;
+      add('omfattning', sqlStr(document.getElementById('f-omfattning').value.trim()));
+      add('start', sqlStr(document.getElementById('f-start').value));
+      add('slut', sqlStr(document.getElementById('f-slut').value));
     }
-    if(state.kind !== 'kurs'){
-      data.avslag = document.getElementById('f-avslag-check').checked;
-      data.avslagsdatum = data.avslag ? document.getElementById('f-avslagsdatum').value : '';
-      data.avslagsinfo = data.avslag ? document.getElementById('f-avslagsinfo').value.trim() : '';
+    if(kind !== 'kurs'){
+      var avslag = document.getElementById('f-avslag-check').checked;
+      add('avslag', sqlBool(avslag));
+      add('avslagsdatum', avslag ? sqlStr(document.getElementById('f-avslagsdatum').value) : 'null');
+      add('avslagsinfo', avslag ? sqlStr(document.getElementById('f-avslagsinfo').value.trim()) : 'null');
     }
-    if(!state.db) return;
-    var col = state.db.collection('entries');
+    if(!state.mcp) return;
+
+    var query;
     if(state.editingId){
-      col.doc(state.editingId).update(data);
+      var setClause = cols.map(function(c,i){ return c + '=' + vals[i]; }).join(', ') + ', updated_at=now()';
+      query = 'update arbetsformedlingen.entries set ' + setClause + ' where id=' + sqlStr(state.editingId);
     } else {
-      data.createdAt = data.updatedAt;
-      col.add(data);
+      query = 'insert into arbetsformedlingen.entries (' + cols.join(', ') + ') values (' + vals.join(', ') + ')';
     }
+    runSql(query).then(loadEntries).catch(function(err){
+      alertInline('Kunde inte spara: ' + (err && err.code ? err.code : String(err)));
+    });
   });
 
+  function alertInline(msg){
+    var el = document.getElementById('offline-note');
+    el.hidden = false;
+    el.textContent = msg;
+  }
+
   // ---- boot ----
+  async function loadEntries(){
+    try{
+      var rows = await runSql('select * from arbetsformedlingen.entries');
+      if(!Array.isArray(rows)){
+        alertInline('Oväntat svarsformat från databasen: ' + JSON.stringify(rows).slice(0,500));
+        return;
+      }
+      state.entries = rows;
+      render();
+    }catch(err){
+      alertInline('Kunde inte läsa loggen: ' + (err && err.code ? err.code : String(err)));
+    }
+  }
+  async function loadPeriod(){
+    try{
+      var rows = await runSql('select * from arbetsformedlingen.meta_period where id=1');
+      state.period = (rows && rows[0]) || null;
+      renderPeriod();
+    }catch(err){ /* non-fatal, leave period card at defaults */ }
+  }
+
   async function boot(){
-    var db = null;
-    try{ db = await claude.use('db'); }catch(e){ db = null; }
-    state.db = db;
-    if(!db){
-      document.getElementById('offline-note').hidden = false;
+    var mcp = null;
+    try{ mcp = await claude.use('mcp'); }catch(e){ mcp = null; }
+    state.mcp = mcp;
+    if(!mcp){
+      alertInline('Databasen kunde inte nås i den här vyn – ändringar går inte att spara just nu.');
       document.getElementById('btn-new').disabled = true;
       render();
       return;
     }
-
-    db.collection('entries').onSnapshot(function(snap){
-      state.entries = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-      render();
-    }, function(err){
-      document.getElementById('offline-note').hidden = false;
-      document.getElementById('offline-note').textContent = 'Kunde inte läsa loggen: ' + err.code;
-    });
-
-    db.doc('meta/period').onSnapshot(function(snap){
-      state.period = snap.exists ? snap.data() : null;
-      renderPeriod();
-    });
+    await loadEntries();
+    await loadPeriod();
   }
 
   render();
