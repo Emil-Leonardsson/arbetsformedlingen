@@ -287,6 +287,33 @@
   .chip.skip{ background:var(--muted-soft); color:var(--muted); }
   .chip.bad{ background:var(--bad-soft); color:var(--bad); }
 
+  .status-group{ display:flex; gap:4px; }
+  .status-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:.02em;
+    padding:4px 8px;
+    border-radius:99px;
+    border:1px solid transparent;
+    cursor:pointer;
+    background:var(--paper);
+    color:var(--ink-soft);
+    opacity:.55;
+  }
+  .status-pill:hover:not(:disabled){ opacity:.85; }
+  .status-pill:disabled{ cursor:default; }
+  .status-pill.active{ opacity:1; border-color:transparent; }
+  .status-pill.new.active{ background-color:var(--warn-soft); color:var(--warn); }
+  .status-pill.done.active{ background-color:var(--good-soft); color:var(--good); }
+  .status-pill.skip.active{ background-color:var(--muted-soft); color:var(--muted); }
+  .status-pill:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .status-err{
+    font-size:10.5px;
+    color:var(--bad);
+    max-width:160px;
+    text-align:right;
+  }
+
   .row-btns{ display:flex; gap:6px; }
   .row-btns button{ padding:5px 9px; font-size:12px; }
 
@@ -636,10 +663,45 @@
       actions.appendChild(badChip);
     }
 
-    var chip = document.createElement('span');
-    chip.className = 'chip ' + statusClass(e.status);
-    chip.textContent = statusLabel(e.status);
-    actions.appendChild(chip);
+    var statusGroup = document.createElement('div');
+    statusGroup.className = 'status-group';
+    var statusErr = document.createElement('div');
+    statusErr.className = 'status-err';
+    statusErr.hidden = true;
+
+    function setSaving(){
+      statusGroup.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+    }
+    function renderGroup(current){
+      statusGroup.innerHTML = '';
+      ['new','done','skip'].forEach(function(s){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'status-pill ' + statusClass(s) + (s === current ? ' active' : '');
+        b.textContent = statusLabel(s);
+        b.disabled = !state.db;
+        b.addEventListener('click', function(){
+          if(!state.db || s === e.status) return;
+          var prevStatus = e.status;
+          statusErr.hidden = true;
+          setSaving();
+          state.db.collection('entries').doc(e.id).update({ status: s, updatedAt: new Date().toISOString() })
+            .then(function(){
+              e.status = s;
+              renderGroup(s);
+            })
+            .catch(function(err){
+              renderGroup(prevStatus);
+              statusErr.textContent = 'Fel: ' + (err && err.code ? err.code : String(err));
+              statusErr.hidden = false;
+            });
+        });
+        statusGroup.appendChild(b);
+      });
+    }
+    renderGroup(e.status || 'new');
+    actions.appendChild(statusGroup);
+    actions.appendChild(statusErr);
 
     var btns = document.createElement('div');
     btns.className = 'row-btns';
