@@ -9,30 +9,21 @@ Sedan 2026-09-15 ligger all data i en riktig Supabase-databas, inte längre i Cl
 - **Projekt**: `kpaolyovfybxedgaigvp` (org "Emil-Leonardsson's Project", eu-west-1)
 - **Schema**: `arbetsformedlingen`, tabeller `entries` och `meta_period`
 - **Migrations/schema-historik**: [Emil-Leonardsson/shared-db](https://github.com/Emil-Leonardsson/shared-db) — databasen delas med andra små personliga appar (t.ex. gym-tracker), varje app har sitt eget Postgres-schema
-- **Åtkomst**: den officiella Supabase MCP-connectorn (kopplad till Emils claude.ai-konto). Från Claude Code: verktygen `mcp__<uuid>__execute_sql` / `apply_migration` / `list_tables` osv (hitta uuid via `ToolSearch` om de inte redan är laddade, eller fråga Emil att aktivera connectorn i chatten om den inte syns).
-- **Aktivitetsloggen** (sidan): https://claude.ai/code/artifact/60593adf-e013-4b1d-81a6-99ecf164e402 — samma URL som tidigare, men sidans kod pratar nu med Supabase via `claude.use("mcp")` istället för `claude.use("db")`. Källkoden ligger i den här mappen: `aktivitetslogg.html`.
+- **Åtkomst från Claude Code/agent-sessioner**: den officiella Supabase MCP-connectorn (kopplad till Emils claude.ai-konto). Verktygen `mcp__<uuid>__execute_sql` / `apply_migration` / `list_tables` osv (hitta uuid via `ToolSearch` om de inte redan är laddade, eller fråga Emil att aktivera connectorn i chatten om den inte syns).
+- **Aktivitetsloggen** (sidan Emil faktiskt använder): https://emil-leonardsson.github.io/arbetsformedlingen/ — en fristående statisk sida (`index.html` i det här repot), **inte** en Claude Artifact längre (den gamla Artifact-versionen är borttagen, se nedan). Sidan pratar direkt med Supabase via `@supabase/supabase-js` (CDN, ingen build), skyddad av inloggning (Supabase Auth, magic link) och RLS låst till `emil.leonardsson@hotmail.com`. Repot är publikt (krävs för gratis GitHub Pages), men det avslöjar bara källkod + den publika anon-nyckeln, aldrig faktisk data, det är RLS som skyddar den.
 
 `Arbetsformedlingen_aktivitetsrapport.md` i den här mappen är en ännu äldre historisk snapshot (markdown-eran, före både Artifact-databasen och Supabase), rör den inte.
 
-### Varför bytet skedde
+### Historik: två tidigare arkitekturer, båda övergivna
 
-Claude Artifacts databas fick en bugg där `write_db`/uppdateringar av befintliga poster krävde ett `if_version`-fält som varken agent-verktyget eller (i praktiken) var enkelt att köra runt. Snarare än att fortsätta patcha kring det flyttades datan till en riktig Postgres-databas (Supabase), som redan fanns tillgänglig via Bolt/team-health-check-kontot.
+1. **Markdown-fil** → för mycket manuellt kopierande mellan chattar.
+2. **Claude Artifact med inbyggd databas** (`claude.use("db")`) → `write_db`/uppdateringar av befintliga poster fick en bugg som krävde ett `if_version`-fält som varken agent-verktyget eller sidans egen kod kunde tillgodose. Sidan låg dessutom bakom ett Claude-konto, inget stabilt publikt/CV-länkbart alternativ.
 
-### Viktig teknisk detalj: hur sidan pratar med Supabase
+Nuvarande lösning (Supabase + GitHub Pages, sedan 2026-09-15/16) löser båda: en riktig databas utan versionskrångel, och en stabil publik URL med riktig inloggning istället för att vara låst till Claude Artifacts.
 
-Artifact-sidor kan **inte** göra vanliga `fetch()`-anrop till Supabase (CSP blockerar utgående nätverksanrop till icke-godkända domäner). Istället används **`mcp`-capabilityn**, som låter sidan anropa viewarens egna anslutna claude.ai-connectors:
+### Hur Claude Code/agent-sessioner pratar med Supabase
 
-```js
-capabilities: { mcp: { servers: [{ server: "Supabase", tools: ["execute_sql"] }] } }
-```
-```js
-const mcp = await claude.use("mcp");
-const res = await mcp.callTool("Supabase", "execute_sql", { project_id: "kpaolyovfybxedgaigvp", query: "..." });
-```
-
-`execute_sql`-verktyget svarar med en text inlindad i en `<untrusted-data-XXXX>...</untrusted-data-XXXX>`-boundary (samma format oavsett om anropet görs från en agent-session eller från sidans egen `mcp`-capability, bekräftat genom att observera ett riktigt anrop). **Obs:** samma tagg-sträng nämns även i prosan precis före den riktiga öppnande taggen ("...boundaries.\n\n<untrusted-data-XXXX>\n[...]"), så en naiv regex som matchar första `<untrusted-data-...>` fångar för mycket. `aktivitetslogg.html` löser det genom att kräva att den infångade texten börjar med `[` eller `{` direkt efter taggen. Om Supabase-verktygets svarsformat någonsin ändras, uppdatera `runSql()`-funktionen i `aktivitetslogg.html` och verifiera **live i webbläsaren** (inte bara via ett agent-tool-anrop, formatet kan skilja sig) innan du litar på tolkningen.
-
-Eftersom det inte finns någon `watchTool`-baserad live-uppdatering (execute_sql är inte deklarerad read-only, så `watchTool` skulle avvisa den), laddas listan om explicit efter varje skrivning (`loadEntries()`), det är alltså inte realtid mellan flera samtidigt öppna flikar, bara efter en egen ändring.
+Direkt via Supabase MCP-connectorns `execute_sql`/`apply_migration` (se ovan). **Obs** en detalj värd att känna till om du någon gång behöver tolka `execute_sql`s textsvar från agent-sidan: det kommer inlindat i en `<untrusted-data-XXXX>...</untrusted-data-XXXX>`-boundary, och samma tagg-sträng nämns även en gång i prosan precis före den riktiga öppnande taggen, så en naiv regex som matchar första `<untrusted-data-...>` fångar fel ställe. `index.html` behöver inte hantera detta alls, den använder `supabase-js` direkt (`db.from('entries').select()` etc), som svarar med vanliga JS-objekt, ingen textparsning.
 
 ## Uppdatera löpande
 
