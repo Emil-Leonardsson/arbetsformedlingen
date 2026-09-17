@@ -224,6 +224,18 @@
     color:var(--accent);
   }
   .tab-panel[hidden]{ display:none; }
+  .filter-active{
+    margin-left:auto;
+    align-self:center;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    padding-right:8px;
+  }
+  .filter-active input{ width:auto; cursor:pointer; }
 
   .row{
     display:grid;
@@ -443,6 +455,10 @@
         <button type="button" class="tab-btn active" data-tab="jobb" role="tab">Sökta jobb <span class="badge" id="tabcount-jobb">0</span></button>
         <button type="button" class="tab-btn" data-tab="intervju" role="tab">Intervjuer <span class="badge" id="tabcount-intervju">0</span></button>
         <button type="button" class="tab-btn" data-tab="kurs" role="tab">Kurser &amp; utbildningar <span class="badge" id="tabcount-kurs">0</span></button>
+        <label class="filter-active">
+          <input type="checkbox" id="filter-active-check">
+          Endast aktiva
+        </label>
       </div>
       <div class="tab-panel" id="tab-jobb"><div id="list-jobb"></div></div>
       <div class="tab-panel" id="tab-intervju" hidden><div id="list-intervju"></div></div>
@@ -565,7 +581,11 @@
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   var db = sb.schema('arbetsformedlingen');
 
-  var state = { entries: [], period: null, session: null, editingId: null, kind: 'jobb', activeTab: 'jobb' };
+  var state = { entries: [], period: null, session: null, editingId: null, kind: 'jobb', activeTab: 'jobb', onlyActive: false };
+
+  function isActive(e){
+    return !e.avslag && e.status !== 'skip';
+  }
 
   function isValidISODate(s){
     return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s+'T00:00:00'));
@@ -595,7 +615,7 @@
     intervjuEl.innerHTML = '';
     kursEl.innerHTML = '';
 
-    var jobb = state.entries.filter(function(e){ return e.kind === 'jobb'; })
+    var jobb = state.entries.filter(function(e){ return e.kind === 'jobb' && (!state.onlyActive || isActive(e)); })
       .sort(function(a,b){
         var aNA = !a.annons, bNA = !b.annons;
         if(aNA !== bNA) return aNA ? 1 : -1;
@@ -604,7 +624,7 @@
         if(!aOK) return 0;
         return b.sokdatum.localeCompare(a.sokdatum);
       });
-    var intervju = state.entries.filter(function(e){ return e.kind === 'intervju'; })
+    var intervju = state.entries.filter(function(e){ return e.kind === 'intervju' && (!state.onlyActive || isActive(e)); })
       .sort(function(a,b){
         var aOK = isValidISODate(a.intervjudatum), bOK = isValidISODate(b.intervjudatum);
         if(aOK !== bOK) return aOK ? -1 : 1;
@@ -614,10 +634,10 @@
     var kurs = state.entries.filter(function(e){ return e.kind === 'kurs'; })
       .sort(function(a,b){ return (b.start||'').localeCompare(a.start||''); });
 
-    if(!jobb.length) jobbEl.innerHTML = '<div class="empty">Inga sökta jobb loggade ännu.</div>';
+    if(!jobb.length) jobbEl.innerHTML = '<div class="empty">' + (state.onlyActive ? 'Inga aktiva sökta jobb just nu.' : 'Inga sökta jobb loggade ännu.') + '</div>';
     jobb.forEach(function(e){ jobbEl.appendChild(rowFor(e)); });
 
-    if(!intervju.length) intervjuEl.innerHTML = '<div class="empty">Inga intervjuer loggade ännu.</div>';
+    if(!intervju.length) intervjuEl.innerHTML = '<div class="empty">' + (state.onlyActive ? 'Inga aktiva intervjuer just nu.' : 'Inga intervjuer loggade ännu.') + '</div>';
     intervju.forEach(function(e){ intervjuEl.appendChild(rowFor(e)); });
 
     if(!kurs.length) kursEl.innerHTML = '<div class="empty">Inga kurser loggade ännu.</div>';
@@ -645,6 +665,11 @@
   }
   document.querySelectorAll('.tab-btn').forEach(function(b){
     b.addEventListener('click', function(){ setTab(b.dataset.tab); });
+  });
+
+  document.getElementById('filter-active-check').addEventListener('change', function(){
+    state.onlyActive = this.checked;
+    render();
   });
 
   function rowFor(e){
