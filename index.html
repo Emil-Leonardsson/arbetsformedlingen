@@ -584,7 +584,7 @@
   var state = { entries: [], period: null, session: null, editingId: null, kind: 'jobb', activeTab: 'jobb', onlyActive: false };
 
   function isActive(e){
-    return !e.avslag && e.status !== 'skip';
+    return !e.avslag;
   }
 
   function isValidISODate(s){
